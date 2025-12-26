@@ -22,13 +22,13 @@ MASTER_EMOJIS = [
     "🐉","🦁","☠️","🌪️","🌋","🩸","🧠","👁️","🦂","🦅"
 ]
 
-# -------- AUTO EMOJI GENERATOR (TOKEN BASED) --------
+# -------- AUTO EMOJI GENERATOR --------
 def generate_emojis(token: str):
     hash_val = hashlib.sha256(token.encode()).hexdigest()
     random.seed(hash_val)
     emojis = MASTER_EMOJIS.copy()
     random.shuffle(emojis)
-    return emojis[:8]  # har bot ke liye unique emojis
+    return emojis[:8]
 
 EMOJIS = generate_emojis(BOT_TOKEN)
 
@@ -55,18 +55,14 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def spam(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not is_owner(user.id):
-        return await update.message.reply_text("❌ Access denied.")
+    if not is_owner(update.effective_user.id):
+        return
 
     if len(context.args) < 2:
         return await update.message.reply_text("Usage: /spam <count> <text>")
 
-    try:
-        count = int(context.args[0])
-        text = " ".join(context.args[1:])
-    except:
-        return await update.message.reply_text("Invalid arguments.")
+    count = int(context.args[0])
+    text = " ".join(context.args[1:])
 
     for _ in range(count):
         await update.message.reply_text(text)
@@ -77,7 +73,7 @@ async def gcnc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
 
     if not is_owner(user.id):
-        return await update.message.reply_text("❌ Access denied.")
+        return
 
     if chat.type not in ["group", "supergroup"]:
         return await update.message.reply_text("Group only command.")
@@ -88,31 +84,35 @@ async def gcnc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     base = " ".join(context.args)
 
     async def loop():
-        while True:
-            try:
+        try:
+            while True:
                 emoji = random.choice(EMOJIS)
                 await chat.set_title(f"{emoji} {base}")
                 await asyncio.sleep(2)
-            except:
-                await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            # 👈 proper stop
+            pass
+        except Exception:
+            await asyncio.sleep(5)
 
     if chat.id in gcnc_tasks:
         gcnc_tasks[chat.id].cancel()
 
-    gcnc_tasks[chat.id] = asyncio.create_task(loop())
+    task = context.application.create_task(loop())
+    gcnc_tasks[chat.id] = task
+
     await update.message.reply_text("✅ GCNC started (emoji auto-rotate)")
 
 async def stopgcnc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+    if not is_owner(update.effective_user.id):
+        return
+
     chat = update.effective_chat
-
-    if not is_owner(user.id):
-        return await update.message.reply_text("❌ Access denied.")
-
     task = gcnc_tasks.pop(chat.id, None)
+
     if task:
         task.cancel()
-        await update.message.reply_text("🛑 GCNC stopped")
+        await update.message.reply_text("🛑 GCNC stopped successfully")
     else:
         await update.message.reply_text("No GCNC running.")
 
